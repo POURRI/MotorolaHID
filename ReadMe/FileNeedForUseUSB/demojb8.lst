@@ -1,0 +1,1035 @@
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 1
+
+
+
+                        1  ; 68HC908JB8 USB HID Demonstration Application
+                        2  ; (C)opywrite P&E Microcomputer Systems, 2000
+                        3  ;
+                        4  ; You may use this code freely as long as this 
+                                                               copyright notice
+                        5  ; and website address is included. Visit us at 
+                                                                www.pemicro.com
+                        6  
+                        7  ; This application is meant to demonstrate a 
+                                                   framework for an application
+                        8  ; running on the 68HC908JB8. It demonstrates a 
+                                                     simple HID interface for a
+                        9  ; USB device and uses interrupts from the USB 
+                                                  peripheral. The HID interface
+                       10  ; is supported through standard API calls in 
+                                                   Windows 98 and Windows 2000.
+                       11  ; It is not supported under Windows NT without 
+                                                   speciality drivers. For more
+                       12  ; information on USB, please visit the USB developer
+                                                       s website at www.usb.org
+                       13  ; and download the USB specification revision 1.1 
+                                                       and the HID device class
+                       14  ; specification version 1.1 for more details.
+                       15  
+                       16  ; Application Information:
+                       17  
+                       18  ; (1) Endpoints 0 and 1 from the USB peripheral are 
+                                                         utilized by this code.
+                       19  ;     All control transactions occur through 
+                                                   endpoint 0. The lookup table
+                       20  ;     information dictates the capabilities of the 
+                                                          device and is read by
+                       21  ;     the PC upon startup through GET_DESCRIPTOR 
+                                                               device requests.
+                       22  ; (2) The state of the device is kept in the 
+                                                 USB_State variable. The device
+                       23  ;     starts in the POWERED state. When a USB reset 
+                                                        is detected, the device
+                       24  ;     is placed into the DEFAULT state. (Note that 
+                                                     a USB reset should only be
+                       25  ;     allowed to force an interrupt for a HC908JB8 
+                                                    device on the ICS08JB board
+                       26  ;     since a RESET will place the device back into 
+                                                        monitor mode.) When the
+                       27  ;     device receives a SET_ADDRESS standard device 
+                                                           request with a valid
+                       28  ;     address, the device is placed into the 
+                                               ADDRESSED state. Finally, when a
+                       29  ;     SET_CONFIGURATION standard device request is 
+                                                     sent, the device is placed
+                       30  ;     into the CONFIGURED state.
+                       31  ; (3) When the device is configured, endpoint 1 is 
+                                                          enabled for interrupt
+                       32  ;     transfers from the PC. Endpoint 1 is capable 
+                                                    of only sending information
+                       33  ;     out from it. Therefore, only IN packets are 
+                                                      accepted at the endpoint.
+                       34  ;     The report descriptor sets up the endpoint to 
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 2
+
+
+
+                                                        transfer only 1 byte of
+                       35  ;     data. So when a IN packet comes from the PC, 
+                                                       the device sends out the
+                       36  ;     data read from the Port B input pins. Note 
+                                                  that the internal pullups are
+                       37  ;     enabled for PORTB in the code (POCR), so the 
+                                                       default input value sent
+                       38  ;     through endpoint 1 should be $FF.
+                       39  ; (4) The HC908JB8 device is assumed to have a 3.00 
+                                                        MHz internal frequency.
+                       40  ;     The COP watchdog is disabled through the 
+                                                               CONFIG register.
+                       41  
+                       42  ; To run this application, you first need to 
+                                                       assemble it with CASM08Z
+                       43  ; by pushing the F4 key on your keyboard.
+                       44  
+                       45  ; To simulate this application in the ICS08JBZ 
+                                                          in-circuit simulator,
+                       46  ; simply run the ICS08JBZ and type "LOAD DEMOJB8" 
+                                                          in the status window.
+                       47  ; The PC will automatically be loaded with the 
+                                                          reset vector. Use the
+                       48  ; BR command to set breakpoints in the USB routines.
+                                                             Use the macro file
+                       49  ; DEMOJB8.MAC to simulate the HID process from a PC 
+                                                                   for the demo
+                       50  ; application by typing "MACRO DEMOJB8" in the 
+                                                           status window. Since
+                       51  ; communication for the USB peripheral requires 
+                                                          timing too fast to be
+                       52  ; handled through the MON08 serial interface, only 
+                                                              ICS08JBZ commands
+                       53  ; (USBIN, USBOUT, USBCLR, USBRESET) can be used to 
+                                                                   simulate USB
+                       54  ; peripheral operation. Therefore the USB connector 
+                                                             on the ICS08 board
+                       55  ; is not used by the in-circuit simulator and you 
+                                                          do not need to attach
+                       56  ; a USB cable from the board to a PC while running 
+                                                           the demo application
+                       57  ; in ICS08JBZ.
+                       58  
+                       59  ; To run this application realtime, you will have 
+                                                            to use the PROG08SZ
+                       60  ; application to program the S19 into the JB8's 
+                                                           on-chip flash block.
+                       61  ; Once you have done this, run the ICD08SZ in-circui
+                                                             t debugger. First,
+                       62  ; you should load the debug information for the 
+                                                     application now programmed
+                       63  ; into the flash. Type "LOADMAP DEMOJB8.MAP" in the 
+                                                           status window.  Only
+                       64  ; the first breakpoint set is valid in flash. To 
+                                                    reset the first breakpoint,
+                       65  ; use the NOBR command before you set the breakpoint
+                                                          . If you do a GO, the
+                       66  ; part will be running in realtime. Note that if 
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 3
+
+
+
+                                                       you break during the USB
+                       67  ; operation, you may need to reset the device to 
+                                                        resynchronize to the PC
+                       68  ; since the device is considered timed-out after a 
+                                                                period of time.
+                       69  ; If you are running under Windows 98 or Windows 
+                                                    2000 and attach a USB cable
+                       70  ; from a PC into the USB connector on the ICS08JB 
+                                                    board, the operating system
+                       71  ; will detect a "new hardware device" and ask for 
+                                                    an INF driver file. At this
+                       72  ; point, choose the INF file (PEDRVUSB.INF) found 
+                                                     in the directory where the
+                       73  ; ICS08JB8 software is installed. When the device 
+                                                   is detected correctly by the
+                       74  ; operating system, a new device type will appear 
+                                                       under the device manager
+                       75  ; called "Human Interface Devices".
+                       76  ; Now, run the sample program (TESTZ.EXE) included 
+                                                     in the installation. Press
+                       77  ; the "Find Device" button first to find the device 
+                                                       with the given Vendor ID
+                       78  ; and Product ID. Then press the "Read Data" button 
+                                                   to read data from the device
+                       79  ; for Port B through the USB connection. Source 
+                                                 code for the sample program is
+                       80  ; included for Visual C++ (version 6.0) and Delphi 
+                                                                 (version 4.0).
+                       81  
+                       82  ; Here is the sample application...
+                       83  
+ 0000                  84  $SET    USE_JB8_PULLUP      ;use the 908JB8 1.5K 
+                                                          internal pullup on D-
+                       85  ; $SETNOT  USE_JB8_PULLUP
+                       86  
+ 0000                  87  $pagewidth 120t
+                       88  
+ 0000                  89  RAMStart       equ    $0040               ; start of RAM for JB8
+ 0000                  90  RomStart       equ    $DC00               ; start of Flash for JB8
+ 0000                  91  VectorStart    equ    $FFF0               ; start of Vectors for JB8
+                       92  
+ 0000                  93  $Include 'jb8regs.inc'
+                       94  * 68HC908JB8 Equates
+                       95  
+                       96  * Input Output Ports
+ 0000                  97  PTA             EQU     $0000           ;I/O PORT A
+ 0000                  98  PORTA           EQU     $0000
+ 0000                  99  PTB             EQU     $0001           ;I/O PORT B
+ 0000                 100  PORTB           EQU     $0001
+ 0000                 101  PTC             EQU     $0002           ;I/O PORT C
+ 0000                 102  PORTC           EQU     $0002
+ 0000                 103  PTD             EQU     $0003           ;I/O PORT D
+ 0000                 104  PORTD           EQU     $0003
+ 0000                 105  DDRA            EQU     $0004           ;Port A Data Direction
+ 0000                 106  DDRB            EQU     $0005           ;Port B Data Direction
+ 0000                 107  DDRC            EQU     $0006           ;Port C Data Direction
+ 0000                 108  DDRD            EQU     $0007           ;Port D Data Direction
+ 0000                 109  PTE             EQU     $0008           ;I/O PORT E
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 4
+
+
+
+ 0000                 110  PORTE           EQU     $0008
+ 0000                 111  DDRE            EQU     $0009           ;Port E Data Direction
+                      112  
+                      113  * Timer Interface Module
+ 0000                 114  TSC             EQU     $0A             ;Timer status and control
+ 0000                 115  TCNTH           EQU     $0C             ;Timer counter register high byte
+ 0000                 116  TCNTL           EQU     $0D             ;Timer counter register low byte
+ 0000                 117  TMODH           EQU     $0E             ;Timer counter modulo high byte
+ 0000                 118  TMODL           EQU     $0F             ;Timer counter modulo low byte
+ 0000                 119  TSC0            EQU     $10             ;Timer channel 0 status and control
+ 0000                 120  TCH0H           EQU     $11             ;Timer channel 0 high byte
+ 0000                 121  TCH0L           EQU     $12             ;Timer channel 0 low byte
+ 0000                 122  TSC1            EQU     $13             ;Timer channel 1 status and control
+ 0000                 123  TCH1H           EQU     $14             ;Timer channel 1 high byte
+ 0000                 124  TCH1L           EQU     $15             ;Timer channel 1 low byte
+                      125  
+                      126  * Keyboard Interrupt Module
+ 0000                 127  KBSCR           EQU     $16             ;Keyboard status and control
+ 0000                 128  INTKBSCR        EQU     $16
+ 0000                 129  KBIER           EQU     $17             ;Keyboard interrupt enable
+ 0000                 130  INTKBIER        EQU     $17
+                      131  
+                      132  * USB Peripheral
+ 0000                 133  UIR2            EQU     $0018           ;USB Interrupt Register 2
+ 0000                 134  UCR2            EQU     $0019           ;USB Control Register 2
+ 0000                 135  UCR3            EQU     $001A           ;USB Control Register 3
+ 0000                 136  UCR4            EQU     $001B           ;USB Control Register 4
+                      137  
+                      138  * Miscellaneous Registers
+ 0000                 139  IOCR            EQU     $001C           ;IRQ Option Control Register
+ 0000                 140  POCR            EQU     $001D           ;Port Option Control Register
+ 0000                 141  ISCR            EQU     $001E           ;IRQ Status and Control Register
+ 0000                 142  CONFIG          EQU     $001F           ;Configuration Register
+                      143  
+                      144  * USB Peripheral
+ 0000                 145  UE0D0           EQU     $0020           ;USB Endpoint 0 Data Reg Byte 0
+ 0000                 146  UE0D1           EQU     $0021           ;USB Endpoint 0 Data Reg Byte 1
+ 0000                 147  UE0D2           EQU     $0022           ;USB Endpoint 0 Data Reg Byte 2
+ 0000                 148  UE0D3           EQU     $0023           ;USB Endpoint 0 Data Reg Byte 3
+ 0000                 149  UE0D4           EQU     $0024           ;USB Endpoint 0 Data Reg Byte 4
+ 0000                 150  UE0D5           EQU     $0025           ;USB Endpoint 0 Data Reg Byte 5
+ 0000                 151  UE0D6           EQU     $0026           ;USB Endpoint 0 Data Reg Byte 6
+ 0000                 152  UE0D7           EQU     $0027           ;USB Endpoint 0 Data Reg Byte 7
+ 0000                 153  UE1D0           EQU     $0028           ;USB Endpoint 1 Data Reg Byte 0
+ 0000                 154  UE1D1           EQU     $0029           ;USB Endpoint 1 Data Reg Byte 1
+ 0000                 155  UE1D2           EQU     $002A           ;USB Endpoint 1 Data Reg Byte 2
+ 0000                 156  UE1D3           EQU     $002B           ;USB Endpoint 1 Data Reg Byte 3
+ 0000                 157  UE1D4           EQU     $002C           ;USB Endpoint 1 Data Reg Byte 4
+ 0000                 158  UE1D5           EQU     $002D           ;USB Endpoint 1 Data Reg Byte 5
+ 0000                 159  UE1D6           EQU     $002E           ;USB Endpoint 1 Data Reg Byte 6
+ 0000                 160  UE1D7           EQU     $002F           ;USB Endpoint 1 Data Reg Byte 7
+ 0000                 161  UE2D0           EQU     $0030           ;USB Endpoint 2 Data Reg Byte 0
+ 0000                 162  UE2D1           EQU     $0031           ;USB Endpoint 2 Data Reg Byte 1
+ 0000                 163  UE2D2           EQU     $0032           ;USB Endpoint 2 Data Reg Byte 2
+ 0000                 164  UE2D3           EQU     $0033           ;USB Endpoint 2 Data Reg Byte 3
+ 0000                 165  UE2D4           EQU     $0034           ;USB Endpoint 2 Data Reg Byte 4
+ 0000                 166  UE2D5           EQU     $0035           ;USB Endpoint 2 Data Reg Byte 5
+ 0000                 167  UE2D6           EQU     $0036           ;USB Endpoint 2 Data Reg Byte 6
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 5
+
+
+
+ 0000                 168  UE2D7           EQU     $0037           ;USB Endpoint 2 Data Reg Byte 7
+ 0000                 169  UADDR           EQU     $0038           ;USB Address Register
+ 0000                 170  UIR0            EQU     $0039           ;USB Interrupt Register 0
+ 0000                 171  UIR1            EQU     $003A           ;USB Interrupt Register 1
+ 0000                 172  UCR0            EQU     $003B           ;USB Control Register 0
+ 0000                 173  UCR1            EQU     $003C           ;USB Control Register 1
+ 0000                 174  USR0            EQU     $003D           ;USB Control Register 0
+ 0000                 175  USR1            EQU     $003E           ;USB Control Register 0
+                      176  
+                      177  * Break Status Register
+ 0000                 178  BSR             EQU     $FE00           ;Break Status Register
+ 0000                 179  RSR             EQU     $FE01           ;Reset Status Register
+ 0000                 180  BFCR            EQU     $FE03           ;Break Flag Control Register
+ 0000                 181  INT1            EQU     $FE04           ;Interrupt Status Register 1
+ 0000                 182  FLCR            EQU     $FE08           ;FLASH Control Register
+ 0000                 183  FLBPR           EQU     $FE09           ;FLASH Block Protect Register
+ 0000                 184  BRKH            EQU     $FE0C           ;Break Address Register High
+ 0000                 185  BRKL            EQU     $FE0D           ;Break Address Register Low
+ 0000                 186  BRKSCR          EQU     $FE0E           ;Break Status and Control Register
+ 0000                 187  COPCTL          EQU     $FFFF           ;COP Control Register
+                      188  
+                      189  
+ 0040                 190      org RamStart
+ 0040                 191  Setup_Packet     ds      8      ; array for SETUP packet
+ 0048                 192  bmReqType      equ    Setup_packet        ; Characteristic of Request
+ 0048                 193  bRequest       equ    {Setup_packet+1}    ; Request Code
+ 0048                 194  wValueL        equ    {Setup_packet+2}    ; Low byte Value Field
+ 0048                 195  wValueH        equ    {Setup_packet+3}    ; High byte Value Field
+ 0048                 196  wIndexL        equ    {Setup_packet+4}    ; Low byte Index Field
+ 0048                 197  wIndexH        equ    {Setup_packet+5}    ; High byte Index Field
+ 0048                 198  wLengthL       equ    {Setup_packet+6}    ; Low byte Length Field
+ 0048                 199  wLengthH       equ    {Setup_packet+7}    ; High byte Length Field
+                      200  
+ 0048                 201  USB_State     ds      1         ; Device State Byte
+ 0049                 202  POWERED       equ     0         ; USB_State=POWERED
+ 0049                 203  DEFAULT       equ     1         ; USB_State=DEFAULT
+ 0049                 204  ADDRESSED     equ     2         ; USB_State=ADDRESSED
+ 0049                 205  CONFIGURED    equ     3         ; USB_State=CONFIGURED
+                      206  
+ 0049                 207  SET_ADDRESS   equ     5         ; Standard Request code for SET_ADDRESS
+ 0049                 208  GET_DESC      equ     6         ; Standard Request code for GET_DESCRIPTOR
+ 0049                 209  SET_CONFIG    equ     9         ; Standard Request code for SET_CONFIGURATION
+                      210  
+ 0049                 211  addrset       ds      1         ; bit 7=1 indicates device address has
+                      212                                  ; been received, bits 6-0 = address
+ 004A                 213  control       ds      1         ; type of transfer in progress
+ 004B                 214  descptr       ds      2         ; pointer to descriptor being sent
+ 004D                 215  descendptr    ds      2         ; end pointer to descriptor being sent
+ 004F                 216  buffptr       ds      2         ; index into the USB data buffer
+ 0051                 217  tptr          ds      2         ; temporary pointer for storage
+                      218  
+ DC00                 219      org RomStart
+                      220  
+                      221  * The following descriptors give the information to the PC what type of
+                      222  * USB device this is and what its capabilities are. They are retrieved
+                      223  * during the configuration phase.
+                      224  
+                      225  * Note that the Vendor and Product IDs specified in this demo are invalid
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 6
+
+
+
+                      226  * USB IDs and are given for demonstration purposes only!
+                      227  
+                      228  * Device Descriptor
+                      229  Dev_Desc:
+ DC00      12         230         db  {DDesc_End-Dev_Desc} ; Descriptor Length
+ DC01      01         231         db  $01                  ; Descriptor Type (Device)
+ DC02      1001       232         db  $10,$01              ; USB specification Release (1.10)
+ DC04      00         233         db  $00                  ; Class Code
+ DC05      00         234         db  $00                  ; Subclass Code
+ DC06      00         235         db  $00                  ; Protocol Code
+ DC07      08         236         db  $08                  ; Maximum Packet Size for EP0 (8 bytes)
+ DC08      0000       237         db  $00,$00              ; Vendor ID=none
+ DC0A      0000       238         db  $00,$00              ; Product ID=none
+ DC0C      0100       239         db  $01,$00              ; Device Release Number (1.00)
+ DC0E      01         240         db  $01                  ; Index to Manufacturer String Descriptor
+ DC0F      02         241         db  $02                  ; Index to Product String Descriptor
+ DC10      00         242         db  $00                  ; Index to Device Serial Number String Descriptor
+ DC11      01         243         db  $01                  ; Number of possible configurations (1)
+                      244  DDesc_End:
+                      245  
+                      246  * Configuration Descriptor
+                      247  Con_Desc:
+ DC12      09         248         db  {CDesc_End-Con_Desc} ; Descriptor Length
+ DC13      02         249         db  $02                  ; Descriptor Type (Configuration)
+ DC14      2200       250         db  {E1Desc_End-Con_Desc},$00 ; Total data length (Config-Interface-EP)
+ DC16      01         251         db  $01                  ; Interfaces supported
+ DC17      01         252         db  $01                  ; Configuration Value
+ DC18      00         253         db  $00                  ; Index to String Descriptor
+ DC19      C0         254         db  $C0                  ; Self powered
+ DC1A      00         255         db  $00                  ; Maximum power consumption=0mA (not applicable)
+                      256  CDesc_End:
+                      257  
+                      258  * Interface Descriptor
+                      259  Int_Desc:
+ DC1B      09         260         db  {IDesc_End-Int_Desc} ; Descriptor Length
+ DC1C      04         261         db  $04                  ; Descriptor Type (Interface)
+ DC1D      00         262         db  $00                  ; Number of Interface
+ DC1E      00         263         db  $00                  ; No alternate setting
+ DC1F      01         264         db  $01                  ; Number of endpoints
+ DC20      03         265         db  $03                  ; Class Code (HID)
+ DC21      00         266         db  $00                  ; Subclass Code
+ DC22      00         267         db  $00                  ; Protocol Code
+ DC23      00         268         db  $00                  ; Index to String Descriptor
+                      269  IDesc_End:
+                      270  
+                      271  * HID Descriptor
+                      272  HID_Desc:
+ DC24      09         273         db  {HDesc_End-HID_Desc} ; Descriptor Length
+ DC25      21         274         db  $21                  ; Descriptor Type (HID)
+ DC26      0001       275         db  $00,$01              ; HID Class Release (1.00)
+ DC28      00         276         db  $00                  ; Country Code=$00
+ DC29      01         277         db  $01                  ; number of HID class descriptors
+ DC2A      22         278         db  $22                  ; Class Descriptor Type (REPORT)
+ DC2B      1700       279         db  {RDesc_End-Rep_Desc},$00 ; length of report descriptor
+                      280  HDesc_End:
+                      281  
+                      282  * Endpoint Descriptor
+                      283  Endp1_Desc:
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 7
+
+
+
+ DC2D      07         284         db  {E1Desc_End-Endp1_Desc} ; Descriptor Length
+ DC2E      05         285         db  $05                  ; Descriptor Type (Endpoint)
+ DC2F      81         286         db  $81                  ; Endpoint Address and Direction (#1,IN)
+ DC30      03         287         db  $03                  ; Endpoint Attribute (Interrupt)
+ DC31      0100       288         db  $01,$00              ; Maximum Packet Size for EP1 (1 byte)
+ DC33      FF         289         db  $FF                  ; Polling Interval=255[ms]
+                      290  E1Desc_End:
+                      291  
+                      292  * Report Descriptor
+                      293  Rep_Desc:
+ DC34      0600FF     294         db  $06,$00,$FF          ; Usage Page (vendor defined)
+ DC37      0901       295         db  $09,$01              ; Usage (vendor defined)
+                      296  
+ DC39      A101       297         db  $A1,$01              ; Collection (Application)
+ DC3B      0902       298         db  $09,$02              ; Usage (vendor defined)
+                      299  
+                      300  ; Input report
+ DC3D      0903       301         db  $09,$03              ; Usage (vendor defined)
+ DC3F      1500       302         db  $15,$00              ; Logical Minimum ($00)
+ DC41      26FF00     303         db  $26,$FF,$00          ; Logical Maximum ($FF)
+ DC44      7508       304         db  $75,$08              ; Report Size (8 bits)
+ DC46      9501       305         db  $95,$01              ; Report Count (1 field)
+ DC48      8102       306         db  $81,$02              ; Input (Data, Variable, Absolute)
+                      307  
+ DC4A      C0         308         db  $C0                  ; End Collection
+                      309  RDesc_End:
+                      310  
+                      311  ***************************************************************
+                      312  * Init_USB - Disables receive and transmit for all endpoints. *
+                      313  *            The USB state is set to powered, where the part  *
+                      314  *            is waiting for an USB reset and for it to be     *
+                      315  *            addressed and configured.                        *
+                      316  ***************************************************************
+                      317  Init_USB:
+ DC4B [04] 6E0048     318         mov   #POWERED,USB_State ; device in POWERED state
+ DC4E [03] 3F49       319         clr   addrset            ; not addressed yet
+ DC50 [03] 3F4A       320         clr   control            ; waiting for control packets
+ DC52 [04] 6E8038     321         mov   #80,UADDR          ; enable USB, address=default
+ DC55 [03] 3F3B       322         clr   UCR0               ; disable all for Epnt 0
+ DC57 [03] 3F3C       323         clr   UCR1               ; disable all for Epnt 1
+ DC59 [03] 3F19       324         clr   UCR2               ; disable all for Epnt 2
+ DC5B [04] 6E0339     325         mov   #3,UIR0            ; enable TXD0IE, RXD0IE
+ DC5E [04] 6EFF18     326         mov   #$FF,UIR2          ; Reset all USB flags
+ DC61                 327  $IF USE_JB8_PULLUP
+ DC61 [04] 6E051A     328         mov   #5,UCR3            ; enable EP1, no STALL, internal pullup
+ DC64                 329  $ELSEIF
+                      330         mov   #1,UCR3            ; enable EP1, no STALL, no internal pullup
+ DC64                 331  $ENDIF
+ DC64 [04] 81         332         rts
+                      333  
+                      334  
+                      335  **************************************************************
+                      336  * MAIN_INIT - This is the point where code starts executing  *
+                      337  *             after a RESET.                                 *
+                      338  **************************************************************
+                      339  MAIN_INIT:
+ DC65 [01] 9C         340         rsp
+ DC66 [01] 4F         341         clra
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 8
+
+
+
+ DC67 [01] 5F         342         clrx
+ DC68 [04] 6E211F     343         mov   #$21,CONFIG        ; URSTD=1 (USB reset=interrupt),
+                      344                                  ; diasble COP watchdog
+ DC6B [04] 6E021D     345         mov   #$02,POCR          ; enable pullups for port B
+ DC6E [05] CDDC4B     346         jsr   Init_USB           ; Initialize USB peripheral
+ DC71 [02] 9A         347         cli                      ; Allow interrupts to happen
+                      348  
+                      349  main_loop:
+ DC72 [01] 9D         350         nop                            ; do nothing in main loop
+ DC73 [03] 20FD       351         bra   main_loop
+                      352  
+                      353  ****************************************************************
+                      354  * FORCE_STALL - A packet is received in the control stage that *
+                      355  *               is not supported. So the device stalls until   *
+                      356  *               new SETUP packet arrives at endpoint 0.        *
+                      357  ****************************************************************
+                      358  FORCE_STALL:
+ DC75 [03] B61A       359         lda   UCR3               ; request not handled
+ DC77 [02] AA30       360         ora   #30                ; set OSTALL0 and ISTALL0
+ DC79 [03] B71A       361         sta   UCR3               ; new SETUP packet clears STALL
+ DC7B [04] 81         362         rts                      ;  bits automatically
+                      363  
+                      364  ****************************************************************
+                      365  * SETADDR_PROC - This procedure handles the standard request   *
+                      366  *                to set the device's address.                  *
+                      367  ****************************************************************
+                      368  SETADDR_PROC:
+ DC7C [03] 450005     369         ldhx  #5
+                      370  SETADDR_PROC2:
+ DC7F [03] E642       371         lda   {wValueH-1},x      ; if any field but ValueL<>0 then
+ DC81 [03] 2615       372         bne   SETADDR_STALL      ; go stall
+ DC83 [03] 5BFA       373         dbnzx SETADDR_PROC2
+ DC85 [03] B642       374         lda   wValueL            ; get address value
+ DC87 [03] 2B0F       375         bmi   SETADDR_STALL      ; if greater than 7 bits, stall
+                      376  
+ DC89 [02] AA80       377         ora   #$80               ; set highest bit for flag
+ DC8B [03] B749       378         sta   addrset            ; store new address in addrset
+                      379                                  ; change UADDR after last IN packet comes
+ DC8D [04] 6E054A     380         mov   #SET_ADDRESS,control ; set flag for control transfer type
+ DC90 [04] 6E0318     381         mov   #3,UIR2            ; clear any TXD0F, RXD0F flag
+ DC93 [04] 6EB03B     382         mov   #$B0,UCR0          ; allow IN packets, when IN packet comes
+ DC96 [03] 2003       383         bra   SETADDR_EXIT       ;  send DATA1 packet with 0 bytes
+                      384  
+                      385  SETADDR_STALL:
+ DC98 [05] CDDC75     386         jsr   FORCE_STALL
+                      387  
+                      388  SETADDR_EXIT:
+ DC9B [04] 81         389         rts
+                      390  
+                      391  ****************************************************************
+                      392  * GETDESC_PROC - This procedure handles the standard request   *
+                      393  *                to get the device's descriptors.              *
+                      394  ****************************************************************
+                      395  GETDESC_PROC:
+ DC9C [03] 450000     396         ldhx  #0                 ; clear H:X pointer
+ DC9F [03] B643       397         lda   wValueH            ; check which descriptor is wanted
+ DCA1 [04] 41010C     398         cbeqa #$1,GETDEVDESC     ; is it device descriptor?
+ DCA4 [04] 41021D     399         cbeqa #$2,GETCONDESC     ; is it configuration descriptor?
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 9
+
+
+
+ DCA7 [04] 41212E     400         cbeqa #$21,GETHIDDESC    ; is it for HID descriptor?
+ DCAA [04] 41223F     401         cbeqa #$22,GETREPDESC    ; is it for Report descriptor?
+ DCAD [03] CCDD22     402         jmp   GETDESC_STALL      ; else go stall
+                      403  
+                      404  GETDEVDESC:
+ DCB0 [04] D6DC00     405         lda   Dev_Desc,x         ; take device descriptor information
+ DCB3 [03] E720       406         sta   UE0D0,x            ; store in USB endpoint 0 data buffer
+ DCB5 [01] 5C         407         incx
+ DCB6 [02] A308       408         cpx   #8                 ; all descriptors more than 8 bytes
+ DCB8 [03] 26F6       409         bne   GETDEVDESC
+ DCBA [03] 45DC12     410         ldhx  #DDesc_End         ; store end location of the descriptor
+ DCBD [04] 354D       411         sthx  descendptr
+ DCBF [03] 45DC00     412         ldhx  #Dev_Desc          ; store pointer to next byte in descriptor
+ DCC2 [03] 203A       413         bra   GETDESC_END
+                      414  
+                      415  GETCONDESC:
+ DCC4 [04] D6DC12     416         lda   Con_Desc,x         ; take configuration descriptor information
+ DCC7 [03] E720       417         sta   UE0D0,x            ; store in USB endpoint 0 data buffer
+ DCC9 [01] 5C         418         incx
+ DCCA [02] A308       419         cpx   #8                 ; all descriptors more than 8 bytes
+ DCCC [03] 26F6       420         bne   GETCONDESC
+ DCCE [03] 45DC34     421         ldhx  #E1Desc_End        ; store end location of the descriptor
+ DCD1 [04] 354D       422         sthx  descendptr
+ DCD3 [03] 45DC12     423         ldhx  #Con_Desc          ; store pointer to next byte in descriptor
+ DCD6 [03] 2026       424         bra   GETDESC_END
+                      425  
+                      426  GETHIDDESC:
+ DCD8 [04] D6DC24     427         lda   HID_Desc,x         ; take HID descriptor information
+ DCDB [03] E720       428         sta   UE0D0,x            ; store in USB endpoint 0 data buffer
+ DCDD [01] 5C         429         incx
+ DCDE [02] A308       430         cpx   #8                 ; all descriptors more than 8 bytes
+ DCE0 [03] 26F6       431         bne   GETHIDDESC
+ DCE2 [03] 45DC2D     432         ldhx  #HDesc_End         ; store end location of the descriptor
+ DCE5 [04] 354D       433         sthx  descendptr
+ DCE7 [03] 45DC24     434         ldhx  #HID_Desc          ; store pointer to next byte in descriptor
+ DCEA [03] 2012       435         bra   GETDESC_END
+                      436  
+                      437  GETREPDESC:
+ DCEC [04] D6DC34     438         lda   REP_Desc,x         ; take report descriptor information
+ DCEF [03] E720       439         sta   UE0D0,x            ; store in USB endpoint 0 data buffer
+ DCF1 [01] 5C         440         incx
+ DCF2 [02] A308       441         cpx   #8                 ; all descriptors more than 8 bytes
+ DCF4 [03] 26F6       442         bne   GETREPDESC
+ DCF6 [03] 45DC4B     443         ldhx  #RDesc_End         ; store end location of the descriptor
+ DCF9 [04] 354D       444         sthx  descendptr
+ DCFB [03] 45DC34     445         ldhx  #REP_Desc          ; store pointer to next byte in descriptor
+                      446  
+                      447  GETDESC_END:
+ DCFE [04] 354B       448         sthx  descptr
+ DD00 [03] B64C       449         lda   descptr+1          ; add length specified in setup packet
+ DD02 [03] BB46       450         add   wLengthL           ;  and store in tptr
+ DD04 [03] B752       451         sta   tptr+1
+ DD06 [03] B64B       452         lda   descptr
+ DD08 [03] B947       453         adc   wLengthH
+ DD0A [03] B751       454         sta   tptr
+ DD0C [04] 5551       455         ldhx  tptr               ; is calculated pointer >= end of descriptor?
+ DD0E [04] 754D       456         cphx  descendptr         ; if so then end_pointer = end of descriptor
+ DD10 [03] 9002       457         bge   GETDESC_END2       ; else, end_pointer= calculated pointer
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 10
+
+
+
+ DD12 [04] 354D       458         sthx  descendptr
+                      459  
+                      460  GETDESC_END2:
+ DD14 [04] 554B       461         ldhx  descptr            ; get pointer to start of descriptor
+ DD16 [02] AF08       462         aix   #8                 ; eight bytes sent already
+ DD18 [04] 354B       463         sthx  descptr            ; store current pointer
+ DD1A [04] 6EB83B     464         mov   #$B8,UCR0          ; change to DATA1 sequence, SIZE=8 bytes
+                      465                                  ; turn on transmitter (TX0E)
+ DD1D [04] 6E064A     466         mov   #GET_DESC,control  ; set flag for control transfer type
+ DD20 [03] 2003       467         bra   GETDESC_EXIT
+                      468  
+                      469  GETDESC_STALL:
+ DD22 [05] CDDC75     470         jsr   FORCE_STALL
+                      471  
+                      472  GETDESC_EXIT:
+ DD25 [04] 81         473         rts
+                      474  
+                      475  ****************************************************************
+                      476  * SETCON_PROC - This procedure handles the standard request to *
+                      477  *               set the configuration of the device.           *
+                      478  ****************************************************************
+                      479  SETCON_PROC:
+ DD26 [03] 450005     480         ldhx  #5
+                      481  SETCON_PROC2:
+ DD29 [03] E642       482         lda   {wValueH-1},x      ; if any field but ValueL<>0 then
+ DD2B [03] 2613       483         bne   SETCON_STALL       ; go stall
+ DD2D [03] 5BFA       484         dbnzx SETCON_PROC2
+ DD2F [03] B642       485         lda   wValueL            ; get configuration value
+ DD31 [02] A101       486         cmp   #01
+ DD33 [03] 260B       487         bne   SETCON_STALL       ; if value<>1 then stall
+ DD35 [04] 6E094A     488         mov   #SET_CONFIG,control ; set flag for control transfer type
+ DD38 [04] 6E0318     489         mov   #3,UIR2            ; clear any TXD0F, RXD0F flag
+ DD3B [04] 6EB03B     490         mov   #$B0,UCR0          ; allow IN packets, when IN packet comes
+ DD3E [03] 2003       491         bra   SETCON_EXIT        ;  send DATA1 packet with 0 bytes
+                      492  
+                      493  SETCON_STALL:
+ DD40 [05] CDDC75     494         jsr   FORCE_STALL
+                      495  
+                      496  SETCON_EXIT:
+ DD43 [04] 81         497         rts
+                      498  
+                      499  ****************************************************************
+                      500  * SETUP_PROC - This procedure handles the SETUP packets that   *
+                      501  *              come into the USB peripheral. The only standard *
+                      502  *              device requests handled are SET_ADDRESS,        *
+                      503  *              GET_DESCRIPTOR, and SET_CONFIGURATION.          *
+                      504  ****************************************************************
+                      505  SETUP_PROC:
+ DD44 [04] 193B       506         bclr  4,UCR0             ; turn off reception from endpoint 0
+ DD46 [04] 1018       507         bset  0,UIR2             ; reset the RXD0F flag
+ DD48 [03] 3F4A       508         clr   control            ; clear flag for control transfer
+ DD4A [03] B63D       509         lda   USR0               ; check size and sequence of SETUP packet
+ DD4C [02] A148       510         cmp   #48                ; is R0SEQ=0, SIZE=8?
+ DD4E [03] 262E       511         bne   SETUP_EXIT         ; if not then exit
+ DD50 [03] 450008     512         ldhx  #8
+                      513  SAVE_SETUP:
+ DD53 [03] E61F       514         lda   {UE0D0-1},x        ; save data to array
+ DD55 [03] E73F       515         sta   {Setup_packet-1},x ; Setup_packet holds info
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 11
+
+
+
+ DD57 [03] 5BFA       516         dbnzx SAVE_SETUP
+ DD59 [03] B640       517         lda   bmReqType          ; if request type is standard
+ DD5B [02] A460       518         and   #$60               ; then go handle standard request
+ DD5D [03] 261C       519         bne   SETUP_STALL        ; otherwise, force stall
+                      520  
+                      521  STANDARD:
+ DD5F [03] B641       522         lda   bRequest           ; get request type
+ DD61 [04] 410508     523         cbeqa #SET_ADDRESS,SET_ADDR  ; if setting address then
+                      524                                      ; store new address and change after
+                      525                                      ; final IN packet
+ DD64 [04] 41060A     526         cbeqa #GET_DESC,GET_DESCR    ; if getting descriptors then
+                      527                                      ; ready the next IN packets for
+                      528                                      ; the descriptor information
+ DD67 [04] 41090C     529         cbeqa #SET_CONFIG,SET_CON    ; if setting configuration then
+                      530                                      ; move from ADDRESSED to CONFIGURED state
+ DD6A [03] 200F       531         bra   SETUP_STALL        ; otherwise, force stall
+                      532  
+                      533  SET_ADDR:
+ DD6C [05] CDDC7C     534         jsr   SETADDR_PROC       ; packet received was SET_ADDRESS
+ DD6F [03] 200D       535         bra   SETUP_EXIT         ; go exit
+                      536  
+                      537  GET_DESCR:
+ DD71 [05] CDDC9C     538         jsr   GETDESC_PROC       ; packet received was GET_DESCRIPTOR
+ DD74 [03] 2008       539         bra   SETUP_EXIT         ; go exit
+                      540  
+                      541  SET_CON:
+ DD76 [05] CDDD26     542         jsr   SETCON_PROC        ; packet received was SET_CONFIGURATION
+ DD79 [03] 2003       543         bra   SETUP_EXIT         ; go exit
+                      544  
+                      545  SETUP_STALL:
+ DD7B [05] CDDC75     546         jsr   FORCE_STALL        ; error, force stall on endpoint 0
+                      547  
+                      548  SETUP_EXIT:
+ DD7E [04] 183B       549         bset  4,UCR0             ; turn on reception from endpoint 0
+ DD80 [04] 81         550         rts
+                      551  
+                      552  ****************************************************************
+                      553  * IN_PROC - This procedure handles the IN packets that come    *
+                      554  *           into the USB peripheral through endpoint 0.        *
+                      555  ****************************************************************
+                      556  IN_PROC:
+ DD81 [04] 1B3B       557         bclr  5,UCR0             ; turn off transmits from endpoint 0
+ DD83 [04] 1218       558         bset  1,UIR2             ; reset the TXD0F flag
+ DD85 [03] B64A       559         lda   control            ; is this IN packet for status stage
+ DD87 [02] A105       560         cmp   #SET_ADDRESS       ;  of SET_ADDRESS?
+ DD89 [03] 2613       561         bne   IN_PROC2
+ DD8B [03] B649       562         lda   addrset            ; then set address of device
+ DD8D [03] B738       563         sta   UADDR
+ DD8F [02] AE01       564         ldx   #DEFAULT           ; device in DEFAULT state
+ DD91 [04] 418002     565         cbeqa #$80,IN_DEF        ; if address is 0 then DEFAULT state
+ DD94 [02] AE02       566         ldx   #ADDRESSED         ; otherwise device in ADDRESSED state
+                      567  IN_DEF:
+ DD96 [03] BF48       568         stx   USB_State          ; set state of device
+ DD98 [03] 3F49       569         clr   addrset            ; clear flag and address
+ DD9A [03] 3F4A       570         clr   control            ; end of control transfer
+ DD9C [03] 2049       571         bra   IN_EXIT
+                      572  
+                      573  IN_PROC2:
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 12
+
+
+
+ DD9E [02] A106       574         cmp   #GET_DESC          ; is this IN packet for data stage
+ DDA0 [03] 2633       575         bne   IN_PROC3           ;  of GET_DESCRIPTOR?
+ DDA2 [03] 450000     576         ldhx  #0                 ; clear index into data buffer
+ DDA5 [04] 354F       577         sthx  buffptr
+                      578  IN_SEND_DATA:
+ DDA7 [04] 554B       579         ldhx  descptr            ; get pointer to descriptor
+ DDA9 [02] F6         580         lda   0,x                ; get descriptor byte
+ DDAA [02] AF01       581         aix   #1
+ DDAC [04] 354B       582         sthx  descptr            ; save pointer to descriptor
+ DDAE [04] 554F       583         ldhx  buffptr            ; get index to data buffer
+ DDB0 [03] E720       584         sta   UE0D0,x            ; place byte in buffer
+ DDB2 [02] AF01       585         aix   #1
+ DDB4 [04] 354F       586         sthx  buffptr            ; save index to data buffer
+ DDB6 [04] 554B       587         ldhx  descptr            ; is it last descriptor byte?
+ DDB8 [04] 754D       588         cphx  descendptr
+ DDBA [03] 2709       589         beq   LAST_DESC
+ DDBC [04] 554F       590         ldhx  buffptr            ; is data buffer filled?
+ DDBE [03] 650008     591         cphx  #8
+ DDC1 [03] 2704       592         beq   DATAFILLED         ;  go send data
+ DDC3 [03] 20E2       593         bra   IN_SEND_DATA       ; else continue
+                      594  
+                      595  LAST_DESC:
+ DDC5 [03] 3F4A       596         clr   control            ; if so then end of data transfer
+                      597  DATAFILLED:
+ DDC7 [03] B63B       598         lda   UCR0               ; take USB control register 0
+ DDC9 [02] A4F0       599         and   #$F0               ; mask off top 4 bits
+ DDCB [02] AA20       600         ora   #$20               ; enable transmits from endpoint 0
+ DDCD [02] A880       601         eor   #$80               ; toggle DATA sequence bit
+ DDCF [03] BA50       602         ora   buffptr+1          ; set the size of the buffer
+ DDD1 [03] B73B       603         sta   UCR0
+ DDD3 [03] 2012       604         bra   IN_EXIT
+                      605  
+                      606  IN_PROC3:
+ DDD5 [02] A109       607         cmp   #SET_CONFIG        ; is this IN packet for status stage
+ DDD7 [03] 260E       608         bne   IN_EXIT            ;  of SET_CONFIGURATION?
+ DDD9 [04] 6E0348     609         mov   #CONFIGURED,USB_State ; device in CONFIGURED state
+ DDDC [03] 3F4A       610         clr   control            ; end of control transfer
+ DDDE [03] B601       611         lda   ptb                ; get Port B value
+ DDE0 [03] B728       612         sta   UE1D0              ; place in endpoint 1 data buffer
+ DDE2 [04] 6E213C     613         mov   #21,UCR1           ; turn on endpoint 1 transmit, size=1 byte
+                      614                                  ; Sequence=0
+ DDE5 [04] 1639       615         bset  3,UIR0             ; enable interrupt for endpoint 1 transmit
+                      616  
+                      617  IN_EXIT:
+ DDE7 [04] 81         618         rts
+                      619  
+                      620  ****************************************************************
+                      621  * OUT_PROC - This procedure handles the OUT packets that are   *
+                      622  *            sent by the USB peripheral through endpoint 0.    *
+                      623  ****************************************************************
+                      624  OUT_PROC:
+ DDE8 [04] 193B       625         bclr  4,UCR0             ; turn off reception from endpoint 0
+ DDEA [04] 1018       626         bset  0,UIR2             ; reset the RXD0F flag
+                      627                                  ; all OUT packets received for endpoint 0
+                      628                                  ; should be for status stage of requests
+                      629  OUT_EXIT:
+ DDEC [04] 183B       630         bset  4,UCR0             ; turn on reception from endpoint 0
+ DDEE [04] 81         631         rts
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 13
+
+
+
+                      632  
+                      633  **************************************************************
+                      634  * USB_ISR - USB Interrupt Service Routine.                   *
+                      635  *           Interrupts here if USB reset, packet is received *
+                      636  *           in endpoint 0, or packet is transmitted from     *
+                      637  *           endpoint 0 or 1.                                 *
+                      638  **************************************************************
+                      639  USB_ISR:
+ DDEF [05] 0D3A13     640         brclr 6,UIR1,UISR_RXD    ; Is it USB reset?
+ DDF2 [04] 6E0148     641         mov   #DEFAULT,USB_State ; device in DEFAULT state
+ DDF5 [04] 6E103B     642         mov   #10,UCR0           ; turn on RX0
+ DDF8 [04] 6E8038     643         mov   #80,UADDR          ; enable USB, address=default
+ DDFB [03] 3F3C       644         clr   UCR1               ; disable all for Epnt 1
+ DDFD [04] 6E0339     645         mov   #3,UIR0            ; enable TXD0IE, RXD0IE
+ DE00 [04] 6E4018     646         mov   #40,UIR2           ; reset USB reset flag
+ DE03 [03] 2027       647         bra   UISR_EXIT          ; exit interrupt
+                      648  
+                      649  UISR_RXD:
+ DE05 [05] 013A0D     650         brclr 0,UIR1,UISR_TXD    ; Is it SETUP/OUT packet received?
+ DE08 [05] 0D3D05     651         brclr 6,USR0,UISR_RXD2   ; is it SETUP packet?
+ DE0B [05] CDDD44     652         jsr   SETUP_PROC         ; handle SETUP packet
+ DE0E [03] 201C       653         bra   UISR_EXIT          ; exit interrupt
+                      654  
+                      655  UISR_RXD2:
+ DE10 [05] CDDDE8     656         jsr   OUT_PROC           ; handle OUT packet
+ DE13 [03] 2017       657         bra   UISR_EXIT          ; exit interrupt
+                      658  
+                      659  UISR_TXD:
+ DE15 [05] 033A05     660         brclr 1,UIR1,UISR_TXD1   ; Is packet sent from IN packet for endpoint 0?
+ DE18 [05] CDDD81     661         jsr   IN_PROC            ; handle IN packet for endpoint 0
+ DE1B [03] 200F       662         bra   UISR_EXIT          ; exit interrupt
+                      663  
+                      664  UISR_TXD1:
+ DE1D [05] 073A0C     665         brclr 3,UIR1,UISR_EXIT   ; Is packet sent from IN packet for endpoint 1?
+ DE20 [03] B601       666         lda   ptb                ; get Port B value
+ DE22 [03] B728       667         sta   UE1D0              ; place in endpoint 1 data buffer
+ DE24 [03] B63C       668         lda   UCR1               ; toggle TX1 data sequence
+ DE26 [02] A880       669         eor   #80
+ DE28 [03] B73C       670         sta   UCR1
+ DE2A [04] 1618       671         bset  3,UIR2             ; reset the TXD1F flag
+                      672  
+                      673  UISR_EXIT:
+ DE2C [07] 80         674         rti
+                      675  
+                      676  **************************************************************
+                      677  * DUMMY_ISR - Dummy Interrupt Service Routine.               *
+                      678  *             Just does a return from interrupt.             *
+                      679  **************************************************************
+                      680  DUMMY_ISR:
+ DE2D [07] 80         681         rti                       ; simple return
+                      682  
+                      683  **************************************************************
+                      684  * Vectors - Specifying Reset and USB Interrupt Routines    *
+                      685  **************************************************************
+ FFF0                 686         org   VectorStart
+                      687  
+ FFF0      DE2D       688         dw    dummy_isr          ; Keyboard Vector
+ FFF2      DE2D       689         dw    dummy_isr          ; TIM Overflow Vector
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 14
+
+
+
+ FFF4      DE2D       690         dw    dummy_isr          ; TIM Channel 1 Vector
+ FFF6      DE2D       691         dw    dummy_isr          ; TIM Channel 0 Vector
+ FFF8      DE2D       692         dw    dummy_isr          ; ~IRQ1
+ FFFA      DDEF       693         dw    usb_isr            ; USB Vector
+ FFFC      DE2D       694         dw    dummy_isr          ; SWI Vector
+ FFFE      DC65       695         dw    main_init          ; Reset Vector
+                      696  
+                      697  
+                      698  ; 68HC908JB8 USB HID Demonstration Application
+                      699  ; (C)opywrite P&E Microcomputer Systems, 2000
+                      700  ;
+                      701  ; You may use this code freely as long as this copyright notice
+                      702  ; and website address is included. Visit us at www.pemicro.com
+                      703   
+
+ Symbol Table 
+
+ADDRESSED        0002
+ADDRSET          0049
+BFCR             FE03
+BMREQTYPE        0040
+BREQUEST         0041
+BRKH             FE0C
+BRKL             FE0D
+BRKSCR           FE0E
+BSR              FE00
+BUFFPTR          004F
+CDESC_END        DC1B
+CONFIG           001F
+CONFIGURED       0003
+CONTROL          004A
+CON_DESC         DC12
+COPCTL           FFFF
+DATAFILLED       DDC7
+DDESC_END        DC12
+DDRA             0004
+DDRB             0005
+DDRC             0006
+DDRD             0007
+DDRE             0009
+DEFAULT          0001
+DESCENDPTR       004D
+DESCPTR          004B
+DEV_DESC         DC00
+DUMMY_ISR        DE2D
+E1DESC_END       DC34
+ENDP1_DESC       DC2D
+FLBPR            FE09
+FLCR             FE08
+FORCE_STALL      DC75
+GETCONDESC       DCC4
+GETDESC_END      DCFE
+GETDESC_END2     DD14
+GETDESC_EXIT     DD25
+GETDESC_PROC     DC9C
+GETDESC_STALL    DD22
+GETDEVDESC       DCB0
+GETHIDDESC       DCD8
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 15
+
+
+
+GETREPDESC       DCEC
+GET_DESC         0006
+GET_DESCR        DD71
+HDESC_END        DC2D
+HID_DESC         DC24
+IDESC_END        DC24
+INIT_USB         DC4B
+INT1             FE04
+INTKBIER         0017
+INTKBSCR         0016
+INT_DESC         DC1B
+IN_DEF           DD96
+IN_EXIT          DDE7
+IN_PROC          DD81
+IN_PROC2         DD9E
+IN_PROC3         DDD5
+IN_SEND_DATA     DDA7
+IOCR             001C
+ISCR             001E
+KBIER            0017
+KBSCR            0016
+LAST_DESC        DDC5
+MAIN_INIT        DC65
+MAIN_LOOP        DC72
+OUT_EXIT         DDEC
+OUT_PROC         DDE8
+POCR             001D
+PORTA            0000
+PORTB            0001
+PORTC            0002
+PORTD            0003
+PORTE            0008
+POWERED          0000
+PTA              0000
+PTB              0001
+PTC              0002
+PTD              0003
+PTE              0008
+RAMSTART         0040
+RDESC_END        DC4B
+REP_DESC         DC34
+ROMSTART         DC00
+RSR              FE01
+SAVE_SETUP       DD53
+SETADDR_EXIT     DC9B
+SETADDR_PROC     DC7C
+SETADDR_PROC2    DC7F
+SETADDR_STALL    DC98
+SETCON_EXIT      DD43
+SETCON_PROC      DD26
+SETCON_PROC2     DD29
+SETCON_STALL     DD40
+SETUP_EXIT       DD7E
+SETUP_PACKET     0040
+SETUP_PROC       DD44
+SETUP_STALL      DD7B
+SET_ADDR         DD6C
+SET_ADDRESS      0005
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 16
+
+
+
+SET_CON          DD76
+SET_CONFIG       0009
+STANDARD         DD5F
+TCH0H            0011
+TCH0L            0012
+TCH1H            0014
+TCH1L            0015
+TCNTH            000C
+TCNTL            000D
+TMODH            000E
+TMODL            000F
+TPTR             0051
+TSC              000A
+TSC0             0010
+TSC1             0013
+UADDR            0038
+UCR0             003B
+UCR1             003C
+UCR2             0019
+UCR3             001A
+UCR4             001B
+UE0D0            0020
+UE0D1            0021
+UE0D2            0022
+UE0D3            0023
+UE0D4            0024
+UE0D5            0025
+UE0D6            0026
+UE0D7            0027
+UE1D0            0028
+UE1D1            0029
+UE1D2            002A
+UE1D3            002B
+UE1D4            002C
+UE1D5            002D
+UE1D6            002E
+UE1D7            002F
+UE2D0            0030
+UE2D1            0031
+UE2D2            0032
+UE2D3            0033
+UE2D4            0034
+UE2D5            0035
+UE2D6            0036
+UE2D7            0037
+UIR0             0039
+UIR1             003A
+UIR2             0018
+UISR_EXIT        DE2C
+UISR_RXD         DE05
+UISR_RXD2        DE10
+UISR_TXD         DE15
+UISR_TXD1        DE1D
+USB_ISR          DDEF
+USB_STATE        0048
+USR0             003D
+USR1             003E
+VECTORSTART      FFF0
+
+
+demojb8.asm            Assembled with CASM08Z  09.06.2011  21:10:21  PAGE 17
+
+
+
+WINDEXH          0045
+WINDEXL          0044
+WLENGTHH         0047
+WLENGTHL         0046
+WVALUEH          0043
+WVALUEL          0042
