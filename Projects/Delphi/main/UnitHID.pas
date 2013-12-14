@@ -20,8 +20,12 @@ type
     //Срабатывает при подключении или отключении
     procedure onChange(AObject: TObject);
 
+    procedure onData(HidDev: TJvHidDevice; ReportID: Byte; const Data: Pointer; Size: Word);
+
     procedure setStatus(status: string);
     procedure BResetClick(Sender: TObject);
+
+    procedure initDevice(HidDev: TJvHidDevice);
 
   private
     { Private declarations }
@@ -32,6 +36,7 @@ type
 var
   FormHID: TFormHID;
   Controller: TJvHidDeviceController;
+  Device: TJvHidDevice;
 
 implementation
 
@@ -43,6 +48,7 @@ begin
   Controller.OnArrival := onArrival;
   Controller.OnRemoval := onRemoval;
   Controller.OnDeviceChange := onChange;
+  Controller.OnDeviceData := onData;
 end;
 
 procedure TFormHID.setStatus(status: string);
@@ -53,6 +59,13 @@ end;
 procedure TFormHID.onArrival(HidDev: TJvHidDevice);
 begin
   FormHID.setStatus('On');
+  initDevice(HidDev);
+end;
+
+procedure TFormHID.initDevice(HidDev: TJvHidDevice);
+begin
+  Device := HidDev;
+  Device.OnData := onData;
 end;
 
 procedure TFormHID.onRemoval(HidDev: TJvHidDevice);
@@ -61,6 +74,11 @@ begin
 end;
 
 procedure TFormHID.onChange(AObject: TObject);
+begin
+  //If need
+end;
+
+procedure TFormHID.onData(HidDev: TJvHidDevice; ReportID: Byte; const Data: Pointer; Size: Word);
 begin
   //If need
 end;
