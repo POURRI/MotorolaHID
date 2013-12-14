@@ -2,7 +2,7 @@ program MainHID;
 
 uses
   Vcl.Forms,
-  UnitHID in 'UnitHID.pas' {FormHID};
+  UnitHID in 'UnitHID.pas' {FormHID},
   Hid in 'library\jvcl\run\Hid.pas',
   JvHidControllerClass in 'library\jvcl\run\JvHidControllerClass.pas',
   JvComponentBase in 'library\jvcl\run\JvComponentBase.pas',
