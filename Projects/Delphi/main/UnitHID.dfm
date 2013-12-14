@@ -2,8 +2,8 @@ object FormHID: TFormHID
   Left = 0
   Top = 0
   Caption = 'FormHID'
-  ClientHeight = 201
-  ClientWidth = 447
+  ClientHeight = 146
+  ClientWidth = 373
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -13,4 +13,38 @@ object FormHID: TFormHID
   OldCreateOrder = False
   PixelsPerInch = 96
   TextHeight = 13
+  object PInfo: TPanel
+    Left = 8
+    Top = 8
+    Width = 353
+    Height = 129
+    TabOrder = 0
+    object LStatus: TLabel
+      Left = 56
+      Top = 30
+      Width = 89
+      Height = 26
+      Caption = 'Status'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -20
+      Font.Name = 'Tahoma'
+      Font.Style = []
+      ParentFont = False
+    end
+    object BReset: TButton
+      Left = 151
+      Top = 27
+      Width = 129
+      Height = 33
+      Caption = 'Reset'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -20
+      Font.Name = 'Tahoma'
+      Font.Style = []
+      ParentFont = False
+      TabOrder = 0
+    end
+  end
 end
