@@ -11,6 +11,7 @@ object FormHID: TFormHID
   Font.Name = 'Tahoma'
   Font.Style = []
   OldCreateOrder = False
+  OnCreate = FormCreate
   PixelsPerInch = 96
   TextHeight = 13
   object PInfo: TPanel
@@ -45,6 +46,7 @@ object FormHID: TFormHID
       Font.Style = []
       ParentFont = False
       TabOrder = 0
+      OnClick = BResetClick
     end
   end
 end
